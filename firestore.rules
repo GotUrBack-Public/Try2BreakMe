@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ==========================================
+    // DEFAULT DENY ALL
+    // ==========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // WALLET METADATA: Public read (NO SEED FIELDS)
+    // ==========================================
+    match /wallet_secrets/{docId} {
+      // Client can ONLY read these specific fields
+      allow read: if request.auth != null
+        && resource.data.keys().hasOnly(['derivationPath', 'label', 'createdAt', 'version', 'rotatedAt']);
+      
+      // No direct write - only Admin SDK
+      allow write: if false;
+    }
+
+    // ==========================================
+    // CLAIMANTS: Public read verified, Auth create
+    // ==========================================
+    match /claimants/{claimantId} {
+      allow read: if true;
+      
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll(['address', 'txid', 'method', 'claimedAt'])
+        && request.resource.data.address.matches('^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$')
+        && request.resource.data.txid.matches('^[a-fA-F0-9]{64}$')
+        && request.resource.data.claimedAt <= request.time;
+      
+      allow update, delete: if false;
+    }
+
+    // ==========================================
+    // SECURITY: BLACKLIST - Admin only (Server-side enforcement)
+    // ==========================================
+    match /security_blacklist/{identifier} {
+      // Client CAN read their own blacklist status (to show warning)
+      allow read: if request.auth != null
+        && (request.auth.token.firebase.sign_in_provider == "anonymous" || request.auth.uid == identifier.split(":")[0]);
+      
+      // Write only via Admin SDK (Cloud Functions)
+      allow write: if false;
+    }
+
+    // ==========================================
+    // SECURITY: COUNTERS - Server only
+    // ==========================================
+    match /security_counters/{identifier} {
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // SECURITY: NONCES - Server only (replay protection)
+    // ==========================================
+    match /security_nonces/{nonce} {
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // AUDIT LOG: Admin only
+    // ==========================================
+    match /audit_log/{logId} {
+      allow read, write: if false;
+    }
+  }
+}

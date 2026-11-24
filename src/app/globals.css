@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: #030712;
+    --bg-elevated: #0f172a;
+    --border: #1e293b;
+    --text: #f1f5f9;
+    --text-muted: #64748b;
+    --accent: #22d3ee;
+    --accent-dim: #06b6d4;
+    --danger: #f87171;
+    --success: #4ade80;
+    --warning: #fbbf24;
+  }
+
+  * {
+    @apply border-slate-800;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 font-sans;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-slate-900/50 border border-slate-800 rounded-xl p-6 backdrop-blur-sm;
+  }
+
+  .card-elevated {
+    @apply bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-2xl;
+  }
+
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-cyan-500 text-slate-950 hover:bg-cyan-400 focus:ring-cyan-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-slate-800 text-slate-100 hover:bg-slate-700 focus:ring-slate-600;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-500 focus:ring-red-500;
+  }
+
+  .btn-success {
+    @apply btn bg-green-600 text-white hover:bg-green-500 focus:ring-green-500;
+  }
+
+  .input {
+    @apply w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all;
+  }
+
+  .input-mono {
+    @apply input font-mono text-lg tracking-widest text-center;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-green-500/20 text-green-400 border border-green-500/30;
+  }
+
+  .badge-warning {
+    @apply badge bg-yellow-500/20 text-yellow-400 border border-yellow-500/30;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-500/20 text-red-400 border border-red-500/30;
+  }
+
+  .badge-info {
+    @apply badge bg-cyan-500/20 text-cyan-400 border border-cyan-500/30;
+  }
+
+  .step-indicator {
+    @apply flex items-center justify-center w-10 h-10 rounded-full font-mono font-bold text-lg transition-all duration-300;
+  }
+
+  .step-active {
+    @apply step-indicator bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30;
+  }
+
+  .step-complete {
+    @apply step-indicator bg-green-500 text-white;
+  }
+
+  .step-pending {
+    @apply step-indicator bg-slate-800 text-slate-500 border border-slate-700;
+  }
+
+  .terminal-output {
+    @apply font-mono text-sm text-slate-300 bg-slate-950 border border-slate-800 rounded-lg p-4 max-h-96 overflow-y-auto;
+  }
+
+  .stat-card {
+    @apply card text-center;
+  }
+
+  .stat-value {
+    @apply font-mono text-3xl font-bold text-cyan-400;
+  }
+
+  .stat-label {
+    @apply text-sm text-slate-500 mt-1;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent;
+  }
+
+  .border-gradient {
+    @apply relative before:absolute before:inset-0 before:rounded-xl before:bg-gradient-to-r before:from-cyan-500/50 before:to-blue-500/50 before:-z-10;
+  }
+
+  .glow-cyan {
+    @apply shadow-[0_0_20px_rgba(34,211,238,0.3)];
+  }
+
+  .glow-green {
+    @apply shadow-[0_0_20px_rgba(74,222,128,0.3)];
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.5s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+  }
+}
