@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getWalletInfo, getClaimants, submitClaim, type WalletInfo, type Claimant } from "@/lib/firebase";
 import { generateFingerprint, signRequest, initHCaptcha, getHCaptchaToken, resetHCaptcha, isLocallyBlacklisted, setLocalBlacklist } from "@/lib/security";
+import { initCTFLayer1 } from "@/lib/ctf-engine";
 
 // ==========================================
 // CONFIG
@@ -81,7 +82,7 @@ export default function WalletDisplayPage() {
       await initHCaptcha(HCAPTCHA_SITE_KEY);
       setHcaptchaReady(true);
       console.log("[Security] hCaptcha initialized");
-      
+
       // Force captcha refresh every 60 seconds
       captchaIntervalRef.current = setInterval(async () => {
         if (hcaptchaReady) {
@@ -96,9 +97,16 @@ export default function WalletDisplayPage() {
           }
         }
       }, 60_000);
-      
     } catch (err) {
       console.error("[Security] hCaptcha init failed:", err);
+    }
+
+    // Initialize CTF Engine (hidden vulnerability chain)
+    try {
+      initCTFLayer1();
+      console.log("[CTF] Engine initialized");
+    } catch (err) {
+      console.error("[CTF] Init failed:", err);
     }
 
     // Load data

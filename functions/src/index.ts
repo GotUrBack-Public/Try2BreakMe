@@ -428,3 +428,229 @@ export const adminClearBlacklist = functions.https.onCall(async (request) => {
   
   return { success: true, message: `Cleared ${blacklistSnap.size} expired blacklist entries` };
 });
+
+// ==========================================
+// CTF VULNERABLE ENDPOINTS (Hidden Challenge Chain)
+// Layer 2: Timing Attack on PIN Verification
+// Layer 3: Predictable Firestore Document ID
+// Layer 4: Weak Key Derivation
+// ==========================================
+
+// CTF Secret PIN (6 digits) - Vulnerable to timing attack
+const CTF_PIN = "739281";
+
+// CTF Challenge Solution - Derives Firestore doc ID
+const CTF_CHALLENGE_SOLUTION = "ctf{t1m1ng_4tt4ck_m4st3r}";
+
+/**
+ * LAYER 2 VULNERABILITY: Timing Attack on PIN Check
+ * 
+ * This endpoint uses a NON-constant-time comparison.
+ * Each correct byte adds ~50-100μs delay via busy loop.
+ * Statistical analysis over ~1000 requests/byte reveals PIN.
+ * 
+ * Hint to Layer 3: "The solution hashes to the secret document ID"
+ */
+export const ctfTimingTest = functions.https.onRequest(async (req, res) => {
+  // CORS for frontend testing
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+  
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+  
+  const { pin } = req.body as { pin?: string };
+  if (!pin || pin.length !== 6) {
+    res.status(400).json({ error: 'PIN must be 6 digits' });
+    return;
+  }
+  
+  const start = process.hrtime.bigint();
+  
+  // VULNERABLE: Non-constant-time comparison with artificial delay
+  let match = true;
+  for (let i = 0; i < CTF_PIN.length; i++) {
+    if (pin[i] !== CTF_PIN[i]) {
+      match = false;
+      break; // Early exit = timing leak
+    }
+    // Artificial delay to make attack feasible over network
+    // Each correct byte ~100μs additional
+    for (let j = 0; j < 50000; j++) {
+      Math.random();
+    }
+  }
+  
+  const end = process.hrtime.bigint();
+  const durationMs = Number(end - start) / 1_000_000;
+  
+  const response: any = {
+    success: match,
+    duration_ms: durationMs.toFixed(3),
+    message: match ? "PIN correct!" : "PIN incorrect",
+  };
+  
+  // HINT to Layer 3: Only returned on successful PIN
+  if (match) {
+    response.hint = "The solution hashes to the secret document ID: SHA256(solution)[:32]";
+    response.next_endpoint = "/api/ctf/challenge";
+  }
+  
+  res.json(response);
+});
+
+/**
+ * LAYER 2: Direct PIN Check Endpoint (same vulnerability)
+ * Called by frontend debug panel
+ */
+export const ctfPinCheck = functions.https.onCall(async (request) => {
+  const { pin } = request.data as { pin?: string };
+  if (!pin || pin.length !== 6) {
+    throw new functions.https.HttpsError("invalid-argument", "PIN must be 6 digits");
+  }
+  
+  const start = process.hrtime.bigint();
+  
+  // VULNERABLE: Same non-constant-time comparison
+  let match = true;
+  for (let i = 0; i < CTF_PIN.length; i++) {
+    if (pin[i] !== CTF_PIN[i]) {
+      match = false;
+      break;
+    }
+    for (let j = 0; j < 50000; j++) {
+      Math.random();
+    }
+  }
+  
+  const end = process.hrtime.bigint();
+  const durationMs = Number(end - start) / 1_000_000;
+  
+  const response: any = {
+    success: match,
+    duration_ms: durationMs.toFixed(3),
+    message: match ? "PIN correct!" : "PIN incorrect",
+  };
+  
+  if (match) {
+    response.hint = "The solution hashes to the secret document ID: SHA256(solution)[:32]";
+    response.next_endpoint = "/api/ctf/challenge";
+  }
+  
+  return response;
+});
+
+/**
+ * LAYER 3 VULNERABILITY: Predictable Firestore Document ID
+ * 
+ * The challenge solution derives the exact document ID:
+ * encrypted-seed-{SHA256(solution)[:32]}
+ * 
+ * Firestore rules allow read if you know the exact ID (intentional misconfig)
+ * 
+ * Hint to Layer 4: "Key = SHA256(PIN + Challenge_Solution)"
+ */
+export const ctfChallenge = functions.https.onCall(async (request) => {
+  const { solution } = request.data as { solution?: string };
+  
+  if (!solution) {
+    throw new functions.https.HttpsError("invalid-argument", "Solution required");
+  }
+  
+  // Derive document ID from solution (matches Firestore rules vulnerability)
+  const encoder = new TextEncoder();
+  const data = encoder.encode(solution);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  const docId = `encrypted-seed-${hashHex.substring(0, 32)}`;
+  
+  // Check if document exists (this is the vulnerability - predictable ID)
+  const docRef = db.collection("secrets").doc(docId);
+  const doc = await docRef.get();
+  
+  if (!doc.exists) {
+    return {
+      success: false,
+      message: "Wrong solution. Document not found.",
+      tried_doc_id: docId,
+    };
+  }
+  
+  const secretData = doc.data()!;
+  
+  // HINT to Layer 4: Key derivation formula
+  return {
+    success: true,
+    message: "Challenge solved! Encrypted seed retrieved.",
+    encrypted_seed: secretData.encryptedSeed,
+    iv: secretData.iv,
+    auth_tag: secretData.authTag,
+    key_hint: "Key = SHA256(PIN + Challenge_Solution)",
+    key_derivation: "AES-256-GCM key = SHA256('739281' + 'ctf{t1m1ng_4tt4ck_m4st3r}')",
+  };
+});
+
+/**
+ * LAYER 4 VULNERABILITY: Weak Key Derivation (Already in adminStoreSeed)
+ * 
+ * The encryption key is simply SHA256(PIN + Challenge_Solution)
+ * No KDF, no salt, no iteration - just raw SHA256
+ * 
+ * This allows full seed decryption once you have:
+ * 1. PIN (from Layer 2 timing attack)
+ * 2. Challenge Solution (from Layer 3)
+ * 3. Encrypted seed data (from Layer 3)
+ * 
+ * Final flag: The decrypted BIP39 seed phrase
+ */
+export const ctfFinalVerify = functions.https.onCall(async (request) => {
+  const { seed_phrase } = request.data as { seed_phrase?: string };
+  
+  // Verify the seed matches what's stored
+  const masterKeyB64 = process.env.MASTER_ENCRYPTION_KEY;
+  if (!masterKeyB64) {
+    throw new functions.https.HttpsError("failed-precondition", "Master key not configured");
+  }
+  
+  const doc = await db.collection("wallet_secrets").doc(METADATA_DOC_ID).get();
+  if (!doc.exists) {
+    throw new functions.https.HttpsError("not-found", "No seed stored");
+  }
+  
+  const { encryptedSeed, iv, authTag } = doc.data()!;
+  
+  // Decrypt with master key
+  const masterKey = Uint8Array.from(atob(masterKeyB64), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey("raw", masterKey, { name: "AES-GCM" }, false, ["decrypt"]);
+  const encryptedBytes = Uint8Array.from(atob(encryptedSeed), c => c.charCodeAt(0));
+  const authTagBytes = Uint8Array.from(atob(authTag), c => c.charCodeAt(0));
+  const ivBytes = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
+  const combined = new Uint8Array(encryptedBytes.length + authTagBytes.length);
+  combined.set(encryptedBytes);
+  combined.set(authTagBytes, encryptedBytes.length);
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: ivBytes }, key, combined);
+  const realSeed = new TextDecoder().decode(decrypted);
+  
+  if (seed_phrase === realSeed) {
+    return {
+      success: true,
+      flag: "CTF{BTC_W4LL3T_PR1Z3_CL41M3D_7HR0UGH_71M1NG_4TT4CK_4ND_CRYPTO_4N4LYS1S}",
+      message: "Congratulations! You've broken the chain. The seed is yours.",
+      seed: realSeed,
+    };
+  }
+  
+  return {
+    success: false,
+    message: "Incorrect seed phrase",
+  };
+});
